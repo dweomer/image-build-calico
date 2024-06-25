@@ -1,6 +1,6 @@
 ARG ARCH="amd64"
 ARG BCI_IMAGE=registry.suse.com/bci/bci-base
-ARG GO_IMAGE=rancher/hardened-build-base:v1.22.3b1
+ARG GO_IMAGE=rancher/hardened-build-base:v1.22.4b2
 ARG CNI_IMAGE_VERSION=v1.4.1-build20240430
 ARG CNI_IMAGE=rancher/hardened-cni-plugins:${CNI_IMAGE_VERSION}
 ARG GOEXPERIMENT=boringcrypto
@@ -9,7 +9,7 @@ FROM ${BCI_IMAGE} as bci
 FROM ${CNI_IMAGE} as cni
 FROM ${GO_IMAGE} as builder
 # setup required packages
-ARG TAG=v3.27.3
+ARG TAG=v3.28.0
 RUN set -x && \
     apk --no-cache add \
     bash \
@@ -43,7 +43,7 @@ FROM calico/bird:v0.3.3-184-g202a2186-${ARCH} AS calico_bird
 ### BEGIN CALICOCTL ###
 FROM builder AS calico_ctl
 ARG ARCH
-ARG TAG=v3.27.3
+ARG TAG=v3.28.0
 ARG GOEXPERIMENT
 WORKDIR $GOPATH/src/github.com/projectcalico/calico/calicoctl
 RUN GO_LDFLAGS="-linkmode=external \
@@ -60,7 +60,7 @@ RUN calicoctl --version
 ### BEGIN CALICO CNI ###
 FROM builder AS calico_cni
 ARG ARCH
-ARG TAG=v3.27.3
+ARG TAG=v3.28.0
 ARG GOEXPERIMENT
 WORKDIR $GOPATH/src/github.com/projectcalico/calico/cni-plugin
 COPY dualStack-changes.patch .
@@ -81,7 +81,7 @@ RUN install -s bin/* /opt/cni/bin/
 ### Can't use go-build-static.sh due to -Wl and --fatal-warnings flags ###
 FROM builder AS calico_node
 ARG ARCH
-ARG TAG=v3.27.3
+ARG TAG=v3.28.0
 ARG GOEXPERIMENT
 WORKDIR $GOPATH/src/github.com/projectcalico/calico/node
 RUN go mod download
@@ -117,13 +117,13 @@ WORKDIR $GOPATH/src/github.com/projectcalico/calico/pod2daemon
 ENV GO_LDFLAGS="-linkmode=external"
 RUN go-build-static.sh -gcflags=-trimpath=${GOPATH}/src -o bin/flexvoldriver ./flexvol
 RUN go-assert-static.sh bin/*
-RUN install -m 0755 flexvol/docker/flexvol.sh /usr/local/bin/
+RUN install -m 0755 flexvol/docker-image/flexvol.sh /usr/local/bin/
 RUN install -D -s bin/flexvoldriver /usr/local/bin/flexvol/flexvoldriver
 ### END CALICO POD2DAEMON #####
 
 ### BEGIN CALICO KUBE-CONTROLLERS ###
 FROM builder AS calico_kubecontrollers
-ARG TAG=v3.27.3
+ARG TAG=v3.28.0
 ARG GOEXPERIMENT
 WORKDIR $GOPATH/src/github.com/projectcalico/calico/kube-controllers
 RUN GO_LDFLAGS="-linkmode=external \
@@ -159,7 +159,7 @@ RUN ./package/install
 # gather all of the disparate calico bits into a rootfs overlay
 FROM scratch AS calico_rootfs_overlay_amd64
 COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/etc/       /etc/
-COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/licenses/  /licenses/
+COPY --from=calico_node /go/src/github.com/projectcalico/calico/licenses/  /licenses/
 COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/sbin/      /usr/sbin/
 COPY --from=calico_node /usr/local/bin/      	     /usr/bin/
 COPY --from=calico_ctl /usr/local/bin/calicoctl      /calicoctl
@@ -174,7 +174,7 @@ COPY --from=runit /opt/local/command/                /usr/sbin/
 
 FROM scratch AS calico_rootfs_overlay_arm64
 COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/etc/       /etc/
-COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/licenses/  /licenses/
+COPY --from=calico_node /go/src/github.com/projectcalico/calico/licenses/  /licenses/
 COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/sbin/      /usr/sbin/
 COPY --from=calico_node /usr/local/bin/      	     /usr/bin/
 COPY --from=calico_ctl /usr/local/bin/calicoctl      /calicoctl
@@ -189,7 +189,7 @@ COPY --from=runit /opt/local/command/                /usr/sbin/
 
 FROM scratch AS calico_rootfs_overlay_s390x
 COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/etc/       /etc/
-COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/licenses/  /licenses/
+COPY --from=calico_node /go/src/github.com/projectcalico/calico/licenses/  /licenses/
 COPY --from=calico_node /go/src/github.com/projectcalico/calico/node/filesystem/sbin/      /usr/sbin/
 COPY --from=calico_node /usr/local/bin/      	     /usr/bin/
 COPY --from=calico_ctl /usr/local/bin/calicoctl      /calicoctl
@@ -226,4 +226,4 @@ COPY --from=calico_rootfs_overlay / /
 ENV PATH=$PATH:/opt/cni/bin
 RUN set -x && \
     test -e /opt/cni/bin/install && \
-    ln -vs /opt/cni/bin/install /install-cni \
+    ln -vs /opt/cni/bin/install /install-cni
